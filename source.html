@@ -1,0 +1,433 @@
+<!DOCTYPE html>
+
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Prehistoric Adventure</title>
+    <script src="https://cdn.jsdelivr.net/npm/p5@1.8.0/lib/p5.js"></script>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            overflow: hidden;
+            background-color: #222;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+        }
+        #canvas-container {
+            width: 100%;
+            max-width: 1200px;
+            margin: 0 auto;
+            display: flex;
+            justify-content: center;
+            position: relative;
+        }
+        .instructions {
+            position: absolute;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            color: white;
+            font-family: Arial, sans-serif;
+            text-align: center;
+            background-color: rgba(0,0,0,0.5);
+            padding: 10px 20px;
+            border-radius: 10px;
+            pointer-events: none;
+        }
+    </style>
+
+<base target="_self">
+
+
+    <div id="canvas-container">
+        <div class="instructions">Arrow keys to move | Space to erupt volcano</div>
+    </div>
+
+    <script>
+        const sketch = (p) => {
+            // Game state
+            let isDay = true;
+            let isErupting = false;
+            let eruptionTime = 0;
+            let shakeOffset = 0;
+            
+            // Dino properties
+            let dino = {
+                x: 200,
+                y: 0,
+                width: 120,
+                height: 80,
+                speed: 5,
+                direction: 1,
+                frame: 0,
+                isMoving: false
+            };
+            
+            // Background layers for parallax
+            let bgLayers = [];
+            let clouds = [];
+            let npcDinosaurs = [];
+            let lavaParticles = [];
+            let smokeParticles = [];
+            let ashParticles = [];
+            
+            // Colors
+            const dayColors = {
+                sky: [135, 206, 235],
+                ground: [34, 139, 34],
+                mountain: [139, 137, 137],
+                volcano: [70, 70, 70],
+                lava: [255, 100, 0],
+                cloud: [255, 255, 255, 200],
+                dino: [100, 150, 50],
+                npcDino: [150, 100, 50]
+            };
+            
+            const nightColors = {
+                sky: [10, 10, 30],
+                ground: [10, 50, 10],
+                mountain: [30, 30, 30],
+                volcano: [40, 40, 40],
+                lava: [255, 80, 0],
+                cloud: [100, 100, 150, 150],
+                dino: [70, 100, 30],
+                npcDino: [100, 70, 30]
+            };
+            
+            p.preload = function() {
+                // Load any assets here if needed
+            };
+            
+            p.setup = function() {
+                let canvas = p.createCanvas(800, 500);
+                canvas.parent('canvas-container');
+                
+                dino.y = p.height - dino.height - 20;
+                
+                // Initialize background layers for parallax
+                for (let i = 0; i < 3; i++) {
+                    bgLayers.push({
+                        x: 0,
+                        speed: 0.2 + i * 0.2,
+                        elements: []
+                    });
+                    
+                    // Add mountains and trees to each layer
+                    for (let j = 0; j < 10; j++) {
+                        const isVolcano = i === 2 && j === 7;
+                        bgLayers[i].elements.push({
+                            x: j * 300 + p.random(-50, 50),
+                            height: isVolcano ? 250 : 100 + p.random(50),
+                            width: isVolcano ? 200 : 80 + p.random(40),
+                            isVolcano: isVolcano
+                        });
+                    }
+                }
+                
+                // Create clouds
+                for (let i = 0; i < 8; i++) {
+                    clouds.push({
+                        x: p.random(p.width),
+                        y: p.random(50, 150),
+                        speed: 0.5 + p.random(1),
+                        size: 50 + p.random(50)
+                    });
+                }
+                
+                // Create NPC dinosaurs
+                for (let i = 0; i < 3; i++) {
+                    npcDinosaurs.push({
+                        x: p.random(p.width),
+                        y: p.height - 80 - p.random(20),
+                        width: 80 + p.random(40),
+                        height: 60 + p.random(30),
+                        speed: 0.5 + p.random(1),
+                        direction: p.random() > 0.5 ? 1 : -1,
+                        frame: 0,
+                        moveTimer: p.random(100)
+                    });
+                }
+            };
+            
+            p.draw = function() {
+                // Handle shaking during eruption
+                if (isErupting) {
+                    shakeOffset = p.sin(p.frameCount * 0.5) * 5;
+                    eruptionTime++;
+                    if (eruptionTime > 180) {
+                        isErupting = false;
+                        eruptionTime = 0;
+                    }
+                } else {
+                    shakeOffset = p.lerp(shakeOffset, 0, 0.1);
+                }
+                
+                p.push();
+                p.translate(shakeOffset, 0);
+                
+                // Draw sky
+                const colors = isDay ? dayColors : nightColors;
+                p.background(...colors.sky);
+                
+                // Draw sun/moon
+                const sunMoonY = p.map(p.sin(p.frameCount * 0.01), -1, 1, 50, p.height/2);
+                p.fill(isDay ? [255, 255, 100] : [200, 200, 255]);
+                p.noStroke();
+                p.ellipse(p.width - 100, sunMoonY, 60, 60);
+                
+                // Draw clouds
+                p.fill(...colors.cloud);
+                for (let cloud of clouds) {
+                    cloud.x -= cloud.speed;
+                    if (cloud.x < -cloud.size) cloud.x = p.width + cloud.size;
+                    
+                    p.ellipse(cloud.x, cloud.y, cloud.size, cloud.size/2);
+                    p.ellipse(cloud.x + cloud.size/3, cloud.y - cloud.size/6, cloud.size*0.8, cloud.size/3);
+                    p.ellipse(cloud.x - cloud.size/3, cloud.y + cloud.size/6, cloud.size*0.7, cloud.size/4);
+                }
+                
+                // Draw background layers with parallax
+                for (let i = 0; i < bgLayers.length; i++) {
+                    const layer = bgLayers[i];
+                    
+                    for (let element of layer.elements) {
+                        // Draw ground
+                        p.fill(colors.ground);
+                        p.noStroke();
+                        p.rect(0, p.height - 50, p.width, 50);
+                        
+                        // Draw mountains/volcano
+                        if (element.isVolcano) {
+                            p.fill(colors.volcano);
+                            p.triangle(
+                                element.x, p.height,
+                                element.x - element.width/2, p.height - element.height,
+                                element.x + element.width/2, p.height - element.height
+                            );
+                            
+                            // Lava during eruption
+                            if (isErupting) {
+                                p.fill(colors.lava);
+                                p.triangle(
+                                    element.x, p.height - element.height + 10,
+                                    element.x - 30, p.height - element.height + 50,
+                                    element.x + 30, p.height - element.height + 50
+                                );
+                            }
+                        } else {
+                            p.fill(colors.mountain);
+                            p.triangle(
+                                element.x, p.height,
+                                element.x - element.width/2, p.height - element.height,
+                                element.x + element.width/2, p.height - element.height
+                            );
+                        }
+                        
+                        // Move elements for parallax effect
+                        element.x -= dino.isMoving ? layer.speed * dino.direction : 0;
+                        if (element.x < -element.width) element.x = p.width + p.random(100);
+                        if (element.x > p.width + element.width) element.x = -element.width - p.random(100);
+                    }
+                }
+                
+                // Draw NPC dinosaurs
+                for (let npc of npcDinosaurs) {
+                    npc.moveTimer--;
+                    if (npc.moveTimer <= 0) {
+                        npc.direction *= -1;
+                        npc.moveTimer = 100 + p.random(100);
+                    }
+                    
+                    npc.x += npc.speed * npc.direction;
+                    if (npc.x < -npc.width) npc.x = p.width;
+                    if (npc.x > p.width) npc.x = -npc.width;
+                    
+                    npc.frame = (npc.frame + 0.1) % 4;
+                    drawDino(npc.x, npc.y, npc.width, npc.height, npc.direction, Math.floor(npc.frame), colors.npcDino);
+                }
+                
+                // Update and draw lava particles
+                if (isErupting) {
+                    if (p.frameCount % 3 === 0) {
+                        const volcano = bgLayers[2].elements.find(e => e.isVolcano);
+                        if (volcano) {
+                            for (let i = 0; i < 3; i++) {
+                                lavaParticles.push({
+                                    x: volcano.x + p.random(-30, 30),
+                                    y: p.height - volcano.height - 20,
+                                    vx: p.random(-2, 2),
+                                    vy: -5 - p.random(5),
+                                    size: 5 + p.random(10),
+                                    life: 100 + p.random(50)
+                                });
+                            }
+                        }
+                    }
+                }
+                
+                for (let i = lavaParticles.length - 1; i >= 0; i--) {
+                    const part = lavaParticles[i];
+                    part.x += part.vx;
+                    part.y += part.vy;
+                    part.vy += 0.1;
+                    part.life--;
+                    
+                    p.fill(colors.lava);
+                    p.ellipse(part.x, part.y, part.size);
+                    
+                    // Add smoke when particles start falling
+                    if (part.vy > 0 && p.frameCount % 5 === 0) {
+                        smokeParticles.push({
+                            x: part.x,
+                            y: part.y,
+                            size: 10 + p.random(10),
+                            life: 50 + p.random(50)
+                        });
+                    }
+                    
+                    if (part.life <= 0 || part.y > p.height) {
+                        lavaParticles.splice(i, 1);
+                    }
+                }
+                
+                // Update and draw smoke particles
+                for (let i = smokeParticles.length - 1; i >= 0; i--) {
+                    const smoke = smokeParticles[i];
+                    smoke.y -= 1;
+                    smoke.x += p.random(-0.5, 0.5);
+                    smoke.size += 0.2;
+                    smoke.life--;
+                    
+                    p.fill(100, 100, 100, smoke.life * 2);
+                    p.ellipse(smoke.x, smoke.y, smoke.size);
+                    
+                    if (smoke.life <= 0) {
+                        smokeParticles.splice(i, 1);
+                    }
+                }
+                
+                // Add ash particles during eruption
+                if (isErupting && p.frameCount % 2 === 0) {
+                    ashParticles.push({
+                        x: p.random(p.width),
+                        y: -10,
+                        speed: 1 + p.random(3),
+                        size: 1 + p.random(3),
+                        life: 200 + p.random(100)
+                    });
+                }
+                
+                // Update and draw ash particles
+                for (let i = ashParticles.length - 1; i >= 0; i--) {
+                    const ash = ashParticles[i];
+                    ash.y += ash.speed;
+                    ash.life--;
+                    
+                    p.fill(100, 100, 100, ash.life/3);
+                    p.ellipse(ash.x, ash.y, ash.size);
+                    
+                    if (ash.life <= 0 || ash.y > p.height) {
+                        ashParticles.splice(i, 1);
+                    }
+                }
+                
+                // Draw player dinosaur
+                dino.frame = dino.isMoving ? (dino.frame + 0.2) % 4 : 0;
+                drawDino(dino.x, dino.y, dino.width, dino.height, dino.direction, Math.floor(dino.frame), colors.dino);
+                
+                p.pop();
+            };
+            
+            function drawDino(x, y, w, h, dir, frame, color) {
+                p.push();
+                p.translate(x, y);
+                p.scale(dir, 1);
+                
+                // Body
+                p.fill(...color);
+                p.ellipse(w/3, h/2, w*0.8, h);
+                
+                // Head
+                p.ellipse(w*0.8, h/3, w/2, h/2);
+                
+                // Eye
+                p.fill(0);
+                p.ellipse(w*0.9, h/3.5, w/15, w/15);
+                
+                // Legs (animate based on frame)
+                const legPos = [
+                    {x1: w/4, y1: h*0.8, x2: w/4, y2: h},
+                    {x1: w/3, y1: h*0.8, x2: w/3, y2: h}
+                ];
+                
+                for (let i = 0; i < 2; i++) {
+                    const offset = (frame % 2 === i % 2) ? -w/10 : w/10;
+                    p.line(legPos[i].x1, legPos[i].y1, legPos[i].x1 + offset, legPos[i].y2);
+                }
+                
+                // Tail
+                p.beginShape();
+                p.vertex(-w/4, h/2);
+                p.bezierVertex(
+                    -w/2, h/2 + h/4,
+                    -w, h/2,
+                    -w, h/2 - h/4
+                );
+                p.endShape();
+                
+                // Spikes
+                for (let i = 0; i < 5; i++) {
+                    const spikeX = p.map(i, 0, 4, -w/4, w*0.7);
+                    p.triangle(
+                        spikeX, h/4,
+                        spikeX + w/15, h/8,
+                        spikeX - w/15, h/8
+                    );
+                }
+                
+                p.pop();
+            }
+            
+            p.keyPressed = function() {
+                if (p.keyCode === p.LEFT_ARROW || p.keyCode === p.RIGHT_ARROW) {
+                    dino.isMoving = true;
+                    dino.direction = p.keyCode === p.RIGHT_ARROW ? 1 : -1;
+                    dino.x += dino.speed * dino.direction;
+                    
+                    // Wrap around screen
+                    if (dino.x < -dino.width) dino.x = p.width;
+                    if (dino.x > p.width) dino.x = -dino.width;
+                }
+                
+                if (p.key === ' ') {
+                    isErupting = true;
+                    eruptionTime = 0;
+                }
+                
+                if (p.key === 'd' || p.key === 'D') {
+                    isDay = !isDay;
+                }
+            };
+            
+            p.keyReleased = function() {
+                if (p.keyCode === p.LEFT_ARROW || p.keyCode === p.RIGHT_ARROW) {
+                    dino.isMoving = false;
+                }
+            };
+            
+            p.windowResized = function() {
+                p.resizeCanvas(p.windowWidth, p.windowHeight);
+                dino.y = p.height - dino.height - 20;
+            };
+        };
+
+        new p5(sketch);
+    </script>
+
+              
+          
+                
+          
+              
